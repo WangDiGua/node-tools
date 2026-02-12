@@ -7,20 +7,49 @@ import { User, Lock, RefreshCw, Key, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { APP_CONFIG } from '../config';
 import { useToast } from '../components/Toast';
+import { useStore } from '../store';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
+  const { dispatch } = useStore();
   const { error: toastError, success: toastSuccess } = useToast();
   
-  const [formData, setFormData] = useState({ username: '', password: '', captcha: '' });
-  const [errors, setErrors] = useState({ username: '', password: '', captcha: '' });
   const [captchaCode, setCaptchaCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
+  // Zod Schema Definition
+  const loginSchema = z.object({
+    username: z.string().min(1, '请输入用户名'),
+    password: z.string().min(1, '请输入密码'),
+    captcha: z.string().min(1, '请输入验证码').refine((val) => val.toUpperCase() === captchaCode, {
+      message: '验证码错误',
+    }),
+  });
+
+  type LoginFormInputs = z.infer<typeof loginSchema>;
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+    resetField,
+  } = useForm<LoginFormInputs>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      username: '',
+      password: '',
+      captcha: '',
+    }
+  });
+
   const refreshCaptcha = () => {
     setCaptchaCode(generateCaptcha());
-    setFormData(prev => ({ ...prev, captcha: '' }));
+    resetField('captcha'); // Clear captcha field on refresh
   };
 
   useEffect(() => {
@@ -28,45 +57,35 @@ export const Login: React.FC = () => {
     const expires = localStorage.getItem(APP_CONFIG.STORAGE_KEYS.REMEMBER_ME);
     if (expires && new Date().getTime() < parseInt(expires)) {
         toastSuccess('欢迎回来 (免登录)');
+        // Try to restore user from storage if remember me is valid
+        const savedUser = localStorage.getItem(APP_CONFIG.STORAGE_KEYS.USER_INFO);
+        if (savedUser) {
+            dispatch({ type: 'SET_USER', payload: JSON.parse(savedUser) });
+        }
         navigate(APP_CONFIG.ROUTES.DASHBOARD);
     }
   }, [navigate]);
 
-  const validate = () => {
-    let isValid = true;
-    const newErrors = { username: '', password: '', captcha: '' };
-
-    if (!formData.username.trim()) {
-      newErrors.username = '请输入用户名';
-      isValid = false;
-    }
-    
-    if (!formData.password) {
-      newErrors.password = '请输入密码';
-      isValid = false;
-    }
-
-    if (!formData.captcha) {
-      newErrors.captcha = '请输入验证码';
-      isValid = false;
-    } else if (formData.captcha.toUpperCase() !== captchaCode) {
-      newErrors.captcha = '验证码错误';
-      isValid = false;
-    }
-
-    setErrors(newErrors);
-    return isValid;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validate()) return;
-
+  const onSubmit = async (data: LoginFormInputs) => {
     setLoading(true);
+    // Simulate API Call
     setTimeout(() => {
         setLoading(false);
-        if (formData.username === 'admin' && formData.password === '123456') {
+        if (data.username === 'admin' && data.password === '123456') {
+            const user = { 
+                username: 'admin', 
+                role: 'admin', 
+                email: 'admin@vector.com',
+                avatar: 'AD'
+            };
+            
+            // Persist Login
             localStorage.setItem(APP_CONFIG.STORAGE_KEYS.TOKEN, 'mock-jwt-token');
+            localStorage.setItem(APP_CONFIG.STORAGE_KEYS.USER_INFO, JSON.stringify(user));
+            
+            // Update Global Store
+            dispatch({ type: 'SET_USER', payload: user });
+
             if (rememberMe) {
                 const sevenDaysLater = new Date().getTime() + (7 * 24 * 60 * 60 * 1000);
                 localStorage.setItem(APP_CONFIG.STORAGE_KEYS.REMEMBER_ME, sevenDaysLater.toString());
@@ -75,9 +94,16 @@ export const Login: React.FC = () => {
             }
             toastSuccess('登录成功');
             navigate(APP_CONFIG.ROUTES.DASHBOARD);
+        } else if (data.username === 'editor' && data.password === '123456') {
+             // Demo Editor User
+             const user = { username: 'editor', role: 'editor', email: 'editor@vector.com', avatar: 'ED' };
+             localStorage.setItem(APP_CONFIG.STORAGE_KEYS.TOKEN, 'mock-jwt-token-editor');
+             localStorage.setItem(APP_CONFIG.STORAGE_KEYS.USER_INFO, JSON.stringify(user));
+             dispatch({ type: 'SET_USER', payload: user });
+             navigate(APP_CONFIG.ROUTES.DASHBOARD);
         } else {
-            setErrors(prev => ({ ...prev, password: '用户名或密码错误 (试用 admin/123456)' }));
-            toastError('登录失败');
+            // Mock Error
+            toastError('登录失败: 用户名或密码错误');
             refreshCaptcha();
         }
     }, 1000);
@@ -164,18 +190,14 @@ export const Login: React.FC = () => {
                     <p className="text-slate-500 mt-2 text-sm dark:text-slate-400">请填写以下信息登录您的账户</p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                     <Input
                         label="用户名"
-                        placeholder="请输入用户名 (admin)"
+                        placeholder="请输入用户名 (admin / editor)"
                         leftIcon={<User size={18} />}
-                        value={formData.username}
-                        onChange={(e) => {
-                            setFormData({...formData, username: e.target.value});
-                            if (errors.username) setErrors({...errors, username: ''});
-                        }}
-                        error={errors.username}
                         className="dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                        error={errors.username?.message}
+                        {...register('username')}
                     />
                     
                     <div>
@@ -184,13 +206,9 @@ export const Login: React.FC = () => {
                             type="password"
                             placeholder="请输入密码 (123456)"
                             leftIcon={<Lock size={18} />}
-                            value={formData.password}
-                            onChange={(e) => {
-                                setFormData({...formData, password: e.target.value});
-                                if (errors.password) setErrors({...errors, password: ''});
-                            }}
-                            error={errors.password}
                             className="dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                            error={errors.password?.message}
+                            {...register('password')}
                         />
                          <div className="flex justify-end mt-1">
                             <a href="#" className="text-xs text-blue-600 hover:text-blue-700 font-medium">忘记密码?</a>
@@ -204,12 +222,8 @@ export const Login: React.FC = () => {
                                 placeholder="4位字符"
                                 leftIcon={<Key size={18} />}
                                 className="uppercase dark:bg-slate-800 dark:border-slate-700 dark:text-white"
-                                value={formData.captcha}
-                                onChange={(e) => {
-                                    setFormData({...formData, captcha: e.target.value});
-                                    if (errors.captcha) setErrors({...errors, captcha: ''});
-                                }}
-                                error={errors.captcha}
+                                error={errors.captcha?.message}
+                                {...register('captcha')}
                             />
                         </div>
                         <div 
@@ -227,7 +241,6 @@ export const Login: React.FC = () => {
                     <div className="flex items-center">
                         <input
                             id="remember-me"
-                            name="remember-me"
                             type="checkbox"
                             checked={rememberMe}
                             onChange={(e) => setRememberMe(e.target.checked)}

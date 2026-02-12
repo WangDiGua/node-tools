@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Content Security Policy (Commented out for development stability, uncomment for production) -->
+    <!-- <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://esm.sh https://*.esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: https://images.unsplash.com; connect-src 'self' https://esm.sh https://*.esm.sh; font-src 'self' data: https://fonts.gstatic.com;" /> -->
     <title>VectorAdmin Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -65,7 +67,13 @@
     "recharts": "https://esm.sh/recharts@2.12.2?deps=react@18.3.1,react-dom@18.3.1",
     "clsx": "https://esm.sh/clsx@2.1.0",
     "framer-motion": "https://esm.sh/framer-motion@10.18.0?deps=react@18.3.1,react-dom@18.3.1",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/"
+    "react-hook-form": "https://esm.sh/react-hook-form@7.51.0?deps=react@18.3.1",
+    "zod": "https://esm.sh/zod@3.22.4",
+    "@hookform/resolvers/zod": "https://esm.sh/@hookform/resolvers@3.3.4/zod?deps=react-hook-form@7.51.0,zod@3.22.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "@hookform/resolvers/": "https://esm.sh/@hookform/resolvers@^5.2.2/",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.4"
   }
 }
 </script>

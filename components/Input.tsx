@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 import { cn } from '../utils';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -8,7 +8,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   leftIcon?: React.ReactNode;
 }
 
-export const Input: React.FC<InputProps> = ({ className, label, error, leftIcon, ...props }) => {
+export const Input = forwardRef<HTMLInputElement, InputProps>(({ className, label, error, leftIcon, ...props }, ref) => {
   return (
     <div className="w-full">
       {label && <label className="block text-sm font-medium text-slate-700 mb-1.5">{label}</label>}
@@ -19,6 +19,7 @@ export const Input: React.FC<InputProps> = ({ className, label, error, leftIcon,
           </div>
         )}
         <input
+          ref={ref}
           className={cn(
             'block w-full rounded-lg border bg-white py-2.5 px-3 text-sm placeholder-slate-400 transition-all duration-200',
             // Default State
@@ -51,4 +52,6 @@ export const Input: React.FC<InputProps> = ({ className, label, error, leftIcon,
       </AnimatePresence>
     </div>
   );
-};
+});
+
+Input.displayName = 'Input';

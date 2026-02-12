@@ -6,7 +6,7 @@ interface AppState {
   themeMode: 'light' | 'dark' | 'system';
   primaryColor: string;
   fontSize: number;
-  pageTransition: 'fade' | 'slide' | 'scale' | 'none'; // Added transition type
+  pageTransition: 'fade' | 'slide' | 'scale' | 'none'; 
   user: any | null;
 }
 
@@ -14,7 +14,7 @@ type Action =
   | { type: 'SET_THEME_MODE'; payload: 'light' | 'dark' | 'system' }
   | { type: 'SET_PRIMARY_COLOR'; payload: string }
   | { type: 'SET_FONT_SIZE'; payload: number }
-  | { type: 'SET_PAGE_TRANSITION'; payload: 'fade' | 'slide' | 'scale' | 'none' } // Added action
+  | { type: 'SET_PAGE_TRANSITION'; payload: 'fade' | 'slide' | 'scale' | 'none' }
   | { type: 'SET_USER'; payload: any }
   | { type: 'LOGOUT' };
 
@@ -23,7 +23,7 @@ const initialState: AppState = {
   themeMode: 'light',
   primaryColor: '#2563eb',
   fontSize: 16,
-  pageTransition: 'fade', // Default transition
+  pageTransition: 'fade',
   user: null,
 };
 
@@ -57,8 +57,9 @@ const StoreContext = createContext<{
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
-  // 初始化：从 LocalStorage 读取配置
+  // 初始化：从 LocalStorage 读取配置和用户信息
   useEffect(() => {
+    // Theme
     const savedTheme = localStorage.getItem(APP_CONFIG.STORAGE_KEYS.THEME);
     if (savedTheme) {
       try {
@@ -71,9 +72,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         console.error("Failed to parse theme settings");
       }
     }
+
+    // User Info
+    const savedUser = localStorage.getItem(APP_CONFIG.STORAGE_KEYS.USER_INFO);
+    if (savedUser) {
+      try {
+        const user = JSON.parse(savedUser);
+        dispatch({ type: 'SET_USER', payload: user });
+      } catch (e) {
+        console.error("Failed to parse user info");
+      }
+    }
   }, []);
 
-  // 监听 State 变化保存到 LocalStorage
+  // 监听 State 变化保存主题配置到 LocalStorage
   useEffect(() => {
       localStorage.setItem(APP_CONFIG.STORAGE_KEYS.THEME, JSON.stringify({
         mode: state.themeMode,

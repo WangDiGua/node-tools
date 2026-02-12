@@ -16,7 +16,12 @@
     "tailwind-merge": "2.2.1",
     "recharts": "2.12.2",
     "clsx": "2.1.0",
-    "framer-motion": "10.18.0"
+    "framer-motion": "10.18.0",
+    "react-hook-form": "7.51.0",
+    "zod": "3.22.4",
+    "@hookform/resolvers": "^5.2.2",
+    "vite": "^7.3.1",
+    "@vitejs/plugin-react": "^5.1.4"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
