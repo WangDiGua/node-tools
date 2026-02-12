@@ -1,62 +1,86 @@
-import { delay } from '../utils';
+import axios, { AxiosInstance, AxiosResponse } from 'https://esm.sh/axios@1.6.7';
 import { APP_CONFIG } from '../config';
+import { mockRequest } from './mock-server';
 
-// 模拟 Axios 响应结构
-interface ApiResponse<T> {
+// Define Standard Response Wrapper
+export interface ApiResponse<T = any> {
   code: number;
   data: T;
   message: string;
 }
 
-// 简单的请求拦截器模拟
-const requestInterceptor = (config: any) => {
-  const token = localStorage.getItem(APP_CONFIG.STORAGE_KEYS.TOKEN);
-  if (token) {
-    config.headers = { ...config.headers, Authorization: `Bearer ${token}` };
+// Create Instance
+const service: AxiosInstance = axios.create({
+  baseURL: APP_CONFIG.API_BASE_URL,
+  timeout: 15000,
+  headers: { 'Content-Type': 'application/json' }
+});
+
+// Request Interceptor
+service.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem(APP_CONFIG.STORAGE_KEYS.TOKEN);
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
   }
-  return config;
+);
+
+// Response Interceptor
+service.interceptors.response.use(
+  (response: AxiosResponse<ApiResponse>) => {
+    const res = response.data;
+    
+    // Assuming 200 is success code from backend
+    if (res.code !== 200) {
+      // Handle Business Errors
+      if (res.code === 401) {
+        localStorage.removeItem(APP_CONFIG.STORAGE_KEYS.TOKEN);
+        localStorage.removeItem(APP_CONFIG.STORAGE_KEYS.USER_INFO);
+        window.location.href = '#/login';
+      }
+      return Promise.reject(new Error(res.message || 'Error'));
+    } else {
+      return res;
+    }
+  },
+  (error) => {
+    // Handle Network/Server Errors
+    const msg = error.response?.data?.message || error.message || 'System Error';
+    if (error.response?.status === 401) {
+        localStorage.removeItem(APP_CONFIG.STORAGE_KEYS.TOKEN);
+        window.location.href = '#/login';
+    }
+    console.error('API Error:', msg);
+    return Promise.reject(new Error(msg));
+  }
+);
+
+// Universal Request Method that routes to Mock or Real Axios
+const makeRequest = async <T>(config: any): Promise<ApiResponse<T>> => {
+    if (APP_CONFIG.USE_MOCK_API) {
+        try {
+            const res = await mockRequest(config);
+            if (res.code !== 200) throw new Error(res.message);
+            return res as ApiResponse<T>;
+        } catch (e: any) {
+            console.error('Mock Request Failed', e);
+            throw e;
+        }
+    }
+    // Real Axios Call (Note: service methods return Promise<any> due to interceptor return type)
+    return service.request(config) as Promise<ApiResponse<T>>;
 };
 
-// 简单的响应拦截器模拟
-const responseInterceptor = (response: ApiResponse<any>) => {
-  if (response.code === 401) {
-    // 模拟 Token 过期跳转
-    localStorage.removeItem(APP_CONFIG.STORAGE_KEYS.TOKEN);
-    window.location.href = '#/login';
-    throw new Error('Unauthorized');
-  }
-  return response;
-};
-
+// Wrapper methods
 export const request = {
-  get: async <T>(url: string, params?: any): Promise<ApiResponse<T>> => {
-    // 模拟拦截器执行
-    requestInterceptor({ url, params });
-    console.log(`[API GET] ${APP_CONFIG.API_BASE_URL}${url}`, params);
-    
-    await delay(500); // 模拟网络延迟
-    
-    // 模拟响应
-    const response = { code: 200, data: {} as T, message: 'Success' };
-    return responseInterceptor(response);
-  },
-  
-  post: async <T>(url: string, data?: any): Promise<ApiResponse<T>> => {
-    requestInterceptor({ url, data });
-    console.log(`[API POST] ${APP_CONFIG.API_BASE_URL}${url}`, data);
-    
-    await delay(500);
-    
-    const response = { code: 200, data: {} as T, message: 'Success' };
-    return responseInterceptor(response);
-  },
-
-  delete: async <T>(url: string): Promise<ApiResponse<T>> => {
-    requestInterceptor({ url });
-    console.log(`[API DELETE] ${APP_CONFIG.API_BASE_URL}${url}`);
-    
-    await delay(400);
-    
-    return responseInterceptor({ code: 200, data: {} as T, message: 'Deleted' });
-  }
+  get: <T>(url: string, params?: any) => makeRequest<T>({ url, method: 'get', params }),
+  post: <T>(url: string, data?: any) => makeRequest<T>({ url, method: 'post', data }),
+  put: <T>(url: string, data?: any) => makeRequest<T>({ url, method: 'put', data }),
+  delete: <T>(url: string, data?: any) => makeRequest<T>({ url, method: 'delete', data }),
+  download: (url: string, params?: any) => makeRequest<any>({ url, method: 'get', params, responseType: 'blob' })
 };

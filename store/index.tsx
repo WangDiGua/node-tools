@@ -1,13 +1,25 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { APP_CONFIG } from '../config';
+import { BackgroundTask } from '../types';
 
 // --- Types ---
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  type: 'success' | 'warning' | 'info' | 'error';
+  time: string;
+  read: boolean;
+}
+
 interface AppState {
   themeMode: 'light' | 'dark' | 'system';
   primaryColor: string;
   fontSize: number;
   pageTransition: 'fade' | 'slide' | 'scale' | 'none'; 
   user: any | null;
+  notifications: NotificationItem[];
+  tasks: BackgroundTask[]; // Added tasks
 }
 
 type Action = 
@@ -16,6 +28,11 @@ type Action =
   | { type: 'SET_FONT_SIZE'; payload: number }
   | { type: 'SET_PAGE_TRANSITION'; payload: 'fade' | 'slide' | 'scale' | 'none' }
   | { type: 'SET_USER'; payload: any }
+  | { type: 'ADD_NOTIFICATION'; payload: NotificationItem }
+  | { type: 'MARK_ALL_READ' }
+  | { type: 'CLEAR_NOTIFICATIONS' }
+  | { type: 'ADD_TASK'; payload: BackgroundTask } // Add Task
+  | { type: 'UPDATE_TASK'; payload: { id: string; progress: number; status?: BackgroundTask['status'] } } // Update Task
   | { type: 'LOGOUT' };
 
 // --- Initial State ---
@@ -25,6 +42,8 @@ const initialState: AppState = {
   fontSize: 16,
   pageTransition: 'fade',
   user: null,
+  notifications: [], 
+  tasks: [], // Initial empty
 };
 
 // --- Reducer ---
@@ -40,8 +59,25 @@ const appReducer = (state: AppState, action: Action): AppState => {
       return { ...state, pageTransition: action.payload };
     case 'SET_USER':
       return { ...state, user: action.payload };
+    case 'ADD_NOTIFICATION':
+      return { ...state, notifications: [action.payload, ...state.notifications] };
+    case 'MARK_ALL_READ':
+      return { ...state, notifications: state.notifications.map(n => ({ ...n, read: true })) };
+    case 'CLEAR_NOTIFICATIONS':
+      return { ...state, notifications: [] };
+    case 'ADD_TASK':
+      return { ...state, tasks: [action.payload, ...state.tasks] };
+    case 'UPDATE_TASK':
+      return {
+        ...state,
+        tasks: state.tasks.map(t => 
+          t.id === action.payload.id 
+            ? { ...t, progress: action.payload.progress, status: action.payload.status || t.status }
+            : t
+        )
+      };
     case 'LOGOUT':
-      return { ...state, user: null };
+      return { ...state, user: null, notifications: [], tasks: [] };
     default:
       return state;
   }

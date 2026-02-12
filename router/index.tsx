@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Database, Search, Book, Eraser, List, Users, Shield, Lock, FileText, User, Settings as SettingsIcon } from 'lucide-react';
+import { LayoutDashboard, Database, Search, Book, Eraser, List, Users, Shield, Lock, FileText, User, Settings as SettingsIcon, BookOpen } from 'lucide-react';
 
 // Lazy load components to optimize initial load
 const Dashboard = React.lazy(() => import('../pages/Dashboard').then(module => ({ default: module.Dashboard })));
@@ -9,8 +9,8 @@ const KBConfig = React.lazy(() => import('../pages/KBConfig').then(module => ({ 
 const KBRetrieval = React.lazy(() => import('../pages/KBRetrieval').then(module => ({ default: module.KBRetrieval })));
 const LLMClean = React.lazy(() => import('../pages/LLMClean').then(module => ({ default: module.LLMClean })));
 const Settings = React.lazy(() => import('../pages/Settings').then(module => ({ default: module.Settings })));
-const LogAudit = React.lazy(() => import('../pages/LogAudit').then(module => ({ default: module.LogAudit })));
 const Profile = React.lazy(() => import('../pages/Profile').then(module => ({ default: module.Profile })));
+const APIDocs = React.lazy(() => import('../pages/APIDocs').then(module => ({ default: module.APIDocs })));
 
 export interface RouteConfig {
   path: string;
@@ -58,10 +58,9 @@ export const appRoutes: RouteConfig[] = [
     meta: { title: '大模型输出清洁', icon: <Eraser size={18} /> }
   },
   {
-    path: 'log-audit',
-    component: LogAudit,
-    roles: ['admin'],
-    meta: { title: '日志审计', icon: <FileText size={18} /> }
+    path: 'api-docs',
+    component: APIDocs,
+    meta: { title: 'API 文档', icon: <BookOpen size={18} /> }
   },
   {
     path: 'settings/*',

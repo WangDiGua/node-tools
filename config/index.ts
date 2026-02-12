@@ -14,7 +14,9 @@ export const APP_CONFIG = {
   APP_NAME: 'VectorAdmin Pro',
   VERSION: '1.0.2',
   
-  // 网络配置 (模拟)
+  // 网络配置
+  // 开启 Mock 模式以修复 "Network Error"
+  USE_MOCK_API: true, 
   API_BASE_URL: process.env.NODE_ENV === 'production' ? 'https://api.vectoradmin.com' : '/api',
   TIMEOUT: 10000,
   

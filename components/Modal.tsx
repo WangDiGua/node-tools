@@ -25,11 +25,12 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
 
   if (!isOpen) return null;
 
+  // Updated to use fixed widths (w-full + max-w) to maintain a consistent ratio
   const sizeClasses = {
-    sm: 'max-w-md',
-    md: 'max-w-lg',
-    lg: 'max-w-2xl',
-    xl: 'max-w-4xl',
+    sm: 'w-full max-w-[400px]', // Compact dialogs
+    md: 'w-full max-w-[600px]', // Standard forms (Standardized width)
+    lg: 'w-full max-w-[800px]', // Complex forms
+    xl: 'w-full max-w-[1024px]', // Data heavy views
     full: 'w-[95vw] h-[90vh] max-w-none', // Full screen logic
   };
 
@@ -38,7 +39,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
       <div 
         ref={modalRef}
         className={cn(
-            "bg-white rounded-xl shadow-2xl transform transition-all scale-100 flex flex-col",
+            "bg-white rounded-xl shadow-2xl transform transition-all scale-100 flex flex-col max-h-[90vh]", // Added max-h for vertical fitting
             sizeClasses[size]
         )}
         role="dialog"
@@ -56,7 +57,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         </div>
         
         {/* Body - Flex grow for full screen mode to handle scrolling correctly */}
-        <div className="px-6 py-6 flex-1 overflow-y-auto">
+        <div className="px-6 py-6 flex-1 overflow-y-auto custom-scrollbar">
           {children}
         </div>
 

@@ -11,7 +11,7 @@ export default defineConfig({
           // Core React dependencies
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           // UI Libraries (heavy ones)
-          'vendor-ui': ['lucide-react', 'framer-motion', 'recharts'],
+          'vendor-ui': ['lucide-react', 'framer-motion', 'echarts'],
           // Form handling
           'vendor-utils': ['react-hook-form', 'zod', 'clsx', 'tailwind-merge']
         }

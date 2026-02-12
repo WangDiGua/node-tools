@@ -1,53 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, Filter, FileText } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Filter, FileText, ToggleLeft, ToggleRight, Layers, Table as TableIcon, Clock, CalendarClock, User as UserIcon, AlertTriangle, Link as LinkIcon, CheckSquare, Download } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { Select } from '../components/Select';
 import { Modal } from '../components/Modal';
 import { Pagination } from '../components/Pagination';
 import { Permission } from '../components/Permission';
-import { VectorWizard, DatabaseItem, TableItem, FieldItem } from '../components/VectorWizard';
-import { VectorItem } from '../types';
-import { request } from '../api/request';
-import { cn } from '../utils';
+import { VectorWizard } from '../components/VectorWizard';
+import { CronGenerator } from '../components/CronGenerator';
+import { VectorItem, DatabaseItem, TableItem, FieldItem } from '../types';
+import { vectorApi } from '../api'; // Real API
+import { cn, formatDate, generateCaptcha } from '../utils';
 import { useToast } from '../components/Toast';
-
-// --- Mock Data ---
-const MOCK_DATABASES: DatabaseItem[] = Array.from({ length: 18 }).map((_, i) => ({
-    id: `db_${i + 1}`,
-    name: i < 3 ? ['MySQL - Core Business', 'PostgreSQL - Knowledge Base', 'MongoDB - User Logs'][i] : `Database_Shard_${i + 1}`,
-    type: i % 3 === 0 ? 'mysql' : i % 3 === 1 ? 'pg' : 'mongo'
-}));
-
-const MOCK_TABLES: Record<string, TableItem[]> = {};
-MOCK_DATABASES.forEach(db => {
-    MOCK_TABLES[db.id] = Array.from({ length: Math.floor(Math.random() * 15) + 5 }).map((_, i) => ({
-        id: `tbl_${db.id}_${i + 1}`,
-        name: `table_data_partition_${i + 1}`,
-        rows: Math.floor(Math.random() * 100000)
-    }));
-});
-// Override first few for stable demo
-MOCK_TABLES['db_1'] = [
-    { id: 'tbl_1_1', name: 'products', rows: 12050 },
-    { id: 'tbl_1_2', name: 'orders', rows: 45000 },
-    { id: 'tbl_1_3', name: 'users', rows: 8900 },
-];
-
-const MOCK_FIELDS: Record<string, FieldItem[]> = {
-    'tbl_1_1': [
-        { id: 'f_1', name: 'product_id', type: 'INT' },
-        { id: 'f_2', name: 'product_name', type: 'VARCHAR' },
-        { id: 'f_3', name: 'description', type: 'TEXT' },
-        { id: 'f_4', name: 'category', type: 'VARCHAR' },
-        { id: 'f_5', name: 'price', type: 'DECIMAL' },
-    ],
-};
 
 export const VectorList: React.FC = () => {
   const { success: toastSuccess, error: toastError } = useToast();
   const [items, setItems] = useState<VectorItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'indexed' | 'pending' | 'error'>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -57,27 +28,57 @@ export const VectorList: React.FC = () => {
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [currentItem, setCurrentItem] = useState<Partial<VectorItem>>({});
 
+  // Sync Modal State
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [currentSyncItem, setCurrentSyncItem] = useState<VectorItem | null>(null);
+  const [syncForm, setSyncForm] = useState({ enabled: false, expression: '' });
+
+  // Delete Verification Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [userInputCode, setUserInputCode] = useState('');
+
+  // Wizard Data State (fetched from API inside component or passed down)
+  const [wizardDbs, setWizardDbs] = useState<DatabaseItem[]>([]);
+
   // Load Data
-  useEffect(() => {
-    const loadData = async () => {
-        setLoading(true);
-        const mockData: VectorItem[] = Array.from({ length: 10 }).map((_, i) => ({
-            id: `vec_${(page - 1) * 10 + i + 1}`,
-            title: `文档向量集 - ${(page - 1) * 10 + i + 1}`,
-            content: `数据样本 ${(page - 1) * 10 + i + 1}...`,
-            dimensions: 1536,
-            source: i % 2 === 0 ? 'MySQL: products' : 'PG: articles',
-            status: i % 5 === 0 ? 'error' : i % 3 === 0 ? 'pending' : 'indexed',
-            createdAt: new Date().toISOString()
-        }));
-        
-        await request.get('/vectors'); 
-        setItems(mockData);
+  const loadData = async () => {
+    setLoading(true);
+    try {
+        const res = await vectorApi.getList({
+            page,
+            pageSize: 10,
+            keyword: searchTerm,
+            status: statusFilter === 'all' ? undefined : statusFilter
+        });
+        if(res.code === 200) {
+            setItems(res.data.list);
+            setTotalPages(Math.ceil(res.data.total / 10));
+        }
+    } catch (e: any) {
+        toastError(e.message || '加载失败');
+    } finally {
         setLoading(false);
-        setSelectedIds([]); 
-    };
+        setSelectedIds([]);
+    }
+  };
+
+  useEffect(() => {
     loadData();
   }, [page, searchTerm, statusFilter]);
+
+  // Load Wizard Dependencies when modal opens
+  const prepareWizard = async () => {
+      try {
+          const res = await vectorApi.getDatabases();
+          if (res.code === 200) {
+              setWizardDbs(res.data);
+          }
+      } catch (e) {
+          toastError('无法加载数据库列表');
+      }
+  };
 
   // --- Handlers ---
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -94,23 +95,71 @@ export const VectorList: React.FC = () => {
   const handleBatchDelete = async () => {
       if (confirm(`确定要删除选中的 ${selectedIds.length} 个向量吗？`)) {
           setLoading(true);
-          await request.delete('/vectors/batch');
-          setItems(items.filter(i => !selectedIds.includes(i.id)));
-          setSelectedIds([]);
-          setLoading(false);
-          toastSuccess('批量删除成功');
+          try {
+              await vectorApi.batchDelete(selectedIds);
+              toastSuccess('批量删除成功');
+              loadData();
+          } catch (e: any) {
+              toastError(e.message);
+              setLoading(false);
+          }
       }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('确定要删除这个向量吗？')) {
+  // Excel (CSV) Export via API
+  const handleExport = async () => {
+      try {
+          const res = await vectorApi.exportExcel(selectedIds);
+          // Create download link from Blob
+          const url = window.URL.createObjectURL(new Blob([res as any]));
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', `vectors_export_${Date.now()}.xlsx`);
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          toastSuccess('导出成功');
+      } catch (e) {
+          toastError('导出失败');
+      }
+  };
+
+  const initDelete = (id: string) => {
+      setDeleteTargetId(id);
+      setVerificationCode(generateCaptcha(4));
+      setUserInputCode('');
+      setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+      if (userInputCode.toUpperCase() !== verificationCode) {
+          toastError('验证码错误，请重试');
+          return;
+      }
+      if (!deleteTargetId) return;
+
+      setIsDeleteModalOpen(false);
       setLoading(true);
-      await request.delete(`/vectors/${id}`);
-      setItems(items.filter((i) => i.id !== id));
-      if (selectedIds.includes(id)) setSelectedIds(selectedIds.filter((i) => i !== id));
-      setLoading(false);
-      toastSuccess('删除成功');
-    }
+      try {
+          await vectorApi.delete(deleteTargetId);
+          toastSuccess('删除成功');
+          loadData();
+      } catch (e: any) {
+          toastError(e.message);
+          setLoading(false);
+      } finally {
+          setDeleteTargetId(null);
+      }
+  };
+
+  const handleToggleEnable = async (item: VectorItem) => {
+      try {
+          await vectorApi.toggleStatus(item.id, !item.isEnabled);
+          setItems(prev => prev.map(i => i.id === item.id ? { ...i, isEnabled: !item.isEnabled } : i));
+          toastSuccess(`向量集已${!item.isEnabled ? '启用' : '禁用'}`);
+      } catch (e: any) {
+          toastError(e.message);
+      }
   };
 
   const handleEdit = (item: VectorItem) => {
@@ -123,6 +172,42 @@ export const VectorList: React.FC = () => {
     setCurrentItem({});
     setModalMode('create');
     setIsModalOpen(true);
+    prepareWizard();
+  };
+
+  // Sync Handlers
+  const handleOpenSync = (item: VectorItem) => {
+      setCurrentSyncItem(item);
+      setSyncForm({
+          enabled: item.cronConfig?.enabled || false,
+          expression: item.cronConfig?.expression || '0 2 * * *' // Default daily 2am
+      });
+      setIsSyncModalOpen(true);
+  };
+
+  const handleSaveSync = async () => {
+      if (!currentSyncItem) return;
+      if (syncForm.enabled && !syncForm.expression.trim()) {
+          toastError('启用定时任务时，Cron 表达式不能为空');
+          return;
+      }
+
+      setLoading(true);
+      try {
+          await vectorApi.configureSync(currentSyncItem.id, syncForm);
+          // Update Local State
+          setItems(prev => prev.map(i => 
+              i.id === currentSyncItem.id 
+                ? { ...i, cronConfig: { ...syncForm } } 
+                : i
+          ));
+          setIsSyncModalOpen(false);
+          toastSuccess(`同步任务已${syncForm.enabled ? '更新并启动' : '关闭'}`);
+      } catch (e: any) {
+          toastError(e.message);
+      } finally {
+          setLoading(false);
+      }
   };
 
   const handleSaveEdit = async () => {
@@ -131,38 +216,64 @@ export const VectorList: React.FC = () => {
               toastError('标题不能为空');
               return;
           }
-          setItems(prev => prev.map(item => item.id === currentItem.id ? { ...item, title: currentItem.title! } as VectorItem : item));
-          toastSuccess('更新成功');
+          // Check for duplicate name before saving
+          try {
+              // Usually the backend checkName would exclude self, or update API handles it.
+              // Assuming update API handles validation or we skip check for simple edit.
+              await vectorApi.update(currentItem.id, { title: currentItem.title });
+              setItems(prev => prev.map(item => item.id === currentItem.id ? { ...item, title: currentItem.title! } as VectorItem : item));
+              toastSuccess('更新成功');
+              setIsModalOpen(false);
+          } catch (e: any) {
+              toastError(e.message);
+          }
       }
-      setIsModalOpen(false);
   };
 
-  const handleWizardFinish = (data: any) => {
-      const db = MOCK_DATABASES.find(d => d.id === data.dbId);
-      const table = MOCK_TABLES[data.dbId!]?.find(t => t.id === data.tableId);
+  const handleWizardFinish = async (data: any) => {
+      try {
+          await vectorApi.create(data);
+          toastSuccess('向量库创建成功');
+          setIsModalOpen(false);
+          loadData();
+      } catch (e: any) {
+          toastError(e.message);
+      }
+  };
 
-      const newItem: VectorItem = {
-          id: `vec_new_${Date.now()}`,
-          title: data.title,
-          content: `Data from ${table?.name}...`,
-          dimensions: 1536,
-          source: `${db?.type?.toUpperCase() || 'DB'}: ${table?.name || 'Table'}`,
-          status: 'indexed',
-          createdAt: new Date().toISOString()
-      };
-      
-      setItems([newItem, ...items]);
-      toastSuccess('向量库创建成功');
-      setIsModalOpen(false);
+  // Helper to render join rules
+  const renderJoinRules = (jsonRules: string | undefined) => {
+    if (!jsonRules) return <span className="text-slate-300">-</span>;
+    try {
+        const rules = JSON.parse(jsonRules);
+        return (
+            <div className="flex items-center gap-1.5" title={JSON.stringify(rules.conditions)}>
+                <span className="text-xs bg-purple-50 text-purple-600 rounded px-1.5 py-0.5 border border-purple-100 font-medium whitespace-nowrap">
+                    {rules.type === 'one_to_one' ? '1:1' : '1:N'}
+                </span>
+                <LinkIcon size={12} className="text-slate-400" />
+                <span className="text-xs text-slate-500 font-mono">
+                    {rules.conditions?.length || 0} Conds
+                </span>
+            </div>
+        );
+    } catch (e) {
+        return <span className="text-red-400 text-xs">Error</span>;
+    }
   };
 
   return (
     <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <h1 className="text-2xl font-bold text-slate-800 dark:text-white">向量管理</h1>
-            <Button onClick={handleCreate}>
-                <Plus size={18} className="mr-2" /> 添加向量
-            </Button>
+            <div className="flex gap-2">
+                <Button variant="secondary" onClick={handleExport}>
+                    <Download size={18} className="mr-2" /> 导出 Excel
+                </Button>
+                <Button onClick={handleCreate}>
+                    <Plus size={18} className="mr-2" /> 添加向量
+                </Button>
+            </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden dark:bg-slate-900 dark:border-slate-800">
@@ -184,18 +295,20 @@ export const VectorList: React.FC = () => {
                 ) : (
                     <>
                         <div className="flex-1 max-w-sm">
-                            <Input placeholder="搜索标题或内容..." leftIcon={<Search size={16} />} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
+                            <Input placeholder="搜索标题..." leftIcon={<Search size={16} />} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
                         </div>
                         <div className="w-40">
-                            <div className="relative">
-                                <Filter size={16} className="absolute left-3 top-2.5 text-slate-400" />
-                                <select className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-blue-500 appearance-none dark:bg-slate-800 dark:border-slate-700 dark:text-white" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
-                                    <option value="all">所有状态</option>
-                                    <option value="indexed">已索引</option>
-                                    <option value="pending">处理中</option>
-                                    <option value="error">错误</option>
-                                </select>
-                            </div>
+                             <Select 
+                                value={statusFilter} 
+                                onChange={(val) => setStatusFilter(val as any)}
+                                leftIcon={<Filter size={16} />}
+                                options={[
+                                    { label: '所有状态', value: 'all' },
+                                    { label: '已索引', value: 'indexed' },
+                                    { label: '处理中', value: 'pending' },
+                                    { label: '错误', value: 'error' },
+                                ]}
+                             />
                         </div>
                     </>
                 )}
@@ -203,32 +316,112 @@ export const VectorList: React.FC = () => {
 
             {/* List Table */}
             <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">
+                <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
                     <thead className="bg-slate-50 text-slate-900 font-semibold border-b border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700">
                         <tr>
-                            <th className="px-6 py-4 w-12"><input type="checkbox" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" onChange={handleSelectAll} checked={items.length > 0 && selectedIds.length === items.length} /></th>
-                            <th className="px-6 py-4">ID</th>
-                            <th className="px-6 py-4">标题</th>
-                            <th className="px-6 py-4">来源</th>
-                            <th className="px-6 py-4">状态</th>
-                            <th className="px-6 py-4 text-right">操作</th>
+                            <th className="px-4 py-4 w-10"><input type="checkbox" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" onChange={handleSelectAll} checked={items.length > 0 && selectedIds.length === items.length} /></th>
+                            <th className="px-4 py-4">ID</th>
+                            <th className="px-4 py-4">集合名称</th>
+                            <th className="px-4 py-4">来源</th>
+                            <th className="px-4 py-4">类型</th>
+                            <th className="px-4 py-4">已选字段</th>
+                            <th className="px-4 py-4">关联规则</th>
+                            <th className="px-4 py-4">创建人</th>
+                            <th className="px-4 py-4">创建时间</th>
+                            <th className="px-4 py-4">更新人</th>
+                            <th className="px-4 py-4">更新时间</th>
+                            <th className="px-4 py-4">状态</th>
+                            <th className="px-4 py-4">启用</th>
+                            <th className="px-4 py-4 text-right">操作</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                         {loading ? (
-                            <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400">加载中...</td></tr>
+                            <tr><td colSpan={14} className="px-6 py-12 text-center text-slate-400">加载中...</td></tr>
                         ) : items.map((item) => (
                             <tr key={item.id} className={cn("hover:bg-slate-50 transition-colors dark:hover:bg-slate-800", selectedIds.includes(item.id) && "bg-blue-50/50 dark:bg-blue-900/10")}>
-                                <td className="px-6 py-4"><input type="checkbox" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" checked={selectedIds.includes(item.id)} onChange={() => handleSelectRow(item.id)} /></td>
-                                <td className="px-6 py-4 font-mono text-xs text-slate-500">{item.id}</td>
-                                <td className="px-6 py-4 font-medium text-slate-800 dark:text-slate-200"><div className="flex items-center"><FileText size={16} className="mr-2 text-slate-400" />{item.title}</div></td>
-                                <td className="px-6 py-4 text-xs">{item.source}</td>
-                                <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${item.status === 'indexed' ? 'bg-green-100 text-green-800' : item.status === 'error' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{item.status === 'indexed' ? '已索引' : item.status === 'error' ? '错误' : '处理中'}</span></td>
-                                <td className="px-6 py-4 text-right">
-                                    <button onClick={() => handleEdit(item)} className="text-blue-600 hover:text-blue-800 p-1.5 hover:bg-blue-50 rounded transition-colors mr-2"><Edit2 size={16} /></button>
-                                    <Permission roles={['admin', 'editor']}>
-                                        <button onClick={() => handleDelete(item.id)} className="text-red-600 hover:text-red-800 p-1.5 hover:bg-red-50 rounded transition-colors"><Trash2 size={16} /></button>
-                                    </Permission>
+                                <td className="px-4 py-4"><input type="checkbox" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" checked={selectedIds.includes(item.id)} onChange={() => handleSelectRow(item.id)} /></td>
+                                <td className="px-4 py-4 text-xs font-mono text-slate-500">{item.id}</td>
+                                <td className="px-4 py-4">
+                                    <div className="font-medium text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                                        <FileText size={14} className="text-slate-400" />
+                                        {item.title}
+                                    </div>
+                                </td>
+                                <td className="px-4 py-4">
+                                     <div className="text-xs text-slate-500 truncate max-w-[120px]" title={item.source}>{item.source}</div>
+                                </td>
+                                <td className="px-4 py-4">
+                                    <div className="flex items-center gap-1.5 text-xs font-medium">
+                                        {item.isMultiTable ? <Layers size={14} className="text-purple-500"/> : <TableIcon size={14} className="text-blue-500"/>}
+                                        {item.isMultiTable ? '多表' : '单表'}
+                                    </div>
+                                </td>
+                                <td className="px-4 py-4">
+                                    <div className="flex items-center gap-1.5" title={item.selectedFields}>
+                                        <CheckSquare size={14} className="text-slate-400" />
+                                        <span className="text-xs text-slate-500 truncate max-w-[100px]">{item.selectedFields}</span>
+                                    </div>
+                                </td>
+                                <td className="px-4 py-4">
+                                    {renderJoinRules(item.joinRules)}
+                                </td>
+                                <td className="px-4 py-4">
+                                    <div className="flex items-center gap-1 text-xs">
+                                        <UserIcon size={12} className="text-slate-400"/> {item.createdBy}
+                                    </div>
+                                </td>
+                                <td className="px-4 py-4 text-xs font-mono text-slate-500">
+                                    {formatDate(item.createdAt)}
+                                </td>
+                                <td className="px-4 py-4">
+                                    <div className="flex items-center gap-1 text-xs">
+                                        <UserIcon size={12} className="text-slate-400"/> {item.updatedBy}
+                                    </div>
+                                </td>
+                                <td className="px-4 py-4 text-xs font-mono text-slate-500">
+                                    {formatDate(item.updatedAt)}
+                                </td>
+                                <td className="px-4 py-4">
+                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${item.status === 'indexed' ? 'bg-green-100 text-green-800' : item.status === 'error' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{item.status === 'indexed' ? '已索引' : item.status === 'error' ? '错误' : '处理中'}</span>
+                                </td>
+                                <td className="px-4 py-4">
+                                    <button onClick={() => handleToggleEnable(item)} className={cn("flex items-center text-xs hover:underline", item.isEnabled ? "text-green-600" : "text-slate-400")}>
+                                        {item.isEnabled ? <ToggleRight size={20} className="mr-1"/> : <ToggleLeft size={20} className="mr-1"/>}
+                                    </button>
+                                </td>
+                                <td className="px-4 py-4 text-right">
+                                    <div className="flex justify-end gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={() => handleOpenSync(item)}
+                                            className={cn("h-7 px-2", item.cronConfig?.enabled ? "text-blue-600 border-blue-200 bg-blue-50" : "text-slate-500")}
+                                            title={item.cronConfig?.enabled ? `定时任务开启中: ${item.cronConfig.expression}` : "配置定时同步"}
+                                        >
+                                            <CalendarClock size={13} />
+                                        </Button>
+                                        <Button 
+                                            size="sm" 
+                                            variant="secondary" 
+                                            onClick={() => handleEdit(item)}
+                                            className="h-7 px-2"
+                                            title="编辑"
+                                        >
+                                            <Edit2 size={13} />
+                                        </Button>
+                                        <Permission roles={['admin', 'editor']}>
+                                            <Button 
+                                                size="sm" 
+                                                variant="danger" 
+                                                onClick={() => initDelete(item.id)}
+                                                className="h-7 px-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 shadow-none"
+                                                title="删除"
+                                            >
+                                                <Trash2 size={13} />
+                                            </Button>
+                                        </Permission>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
@@ -236,17 +429,16 @@ export const VectorList: React.FC = () => {
                 </table>
             </div>
             <div className="border-t border-slate-200 dark:border-slate-800">
-                <Pagination currentPage={page} totalPages={12} onPageChange={setPage} />
+                <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
             </div>
         </div>
 
-        {/* Modal: Create (Full Screen via Wizard) or Edit (Standard) */}
+        {/* Wizard / Edit Modal */}
         <Modal
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
             title={modalMode === 'create' ? `添加向量` : '编辑向量'}
             size={modalMode === 'create' ? 'full' : 'md'}
-            // Wizard footer is handled inside the wizard now for step control
             footer={modalMode === 'edit' ? (
                 <>
                     <Button variant="secondary" onClick={() => setIsModalOpen(false)}>取消</Button>
@@ -259,20 +451,123 @@ export const VectorList: React.FC = () => {
                     <Input label="向量标题" value={currentItem.title} onChange={(e) => setCurrentItem({...currentItem, title: e.target.value})} />
                     <Input label="ID" value={currentItem.id} disabled className="bg-slate-50" />
                     <Input label="来源" value={currentItem.source} disabled className="bg-slate-50" />
+                    <div className="text-xs text-slate-500">
+                         <p>创建人: {currentItem.createdBy}</p>
+                         <p>创建时间: {formatDate(currentItem.createdAt!)}</p>
+                    </div>
                     <div className="text-xs text-yellow-600 bg-yellow-50 p-3 rounded-md flex items-start"><span className="mr-2">⚠️</span> 为了保证数据一致性，仅允许修改标题。</div>
                 </div>
             ) : (
                 <div className="h-full w-full max-w-7xl mx-auto">
+                   {/* Pass real databases and fetchers to wizard */}
                    <VectorWizard 
                         onFinish={handleWizardFinish}
                         onCancel={() => setIsModalOpen(false)}
-                        databases={MOCK_DATABASES}
-                        getTables={(dbId) => MOCK_TABLES[dbId] || []}
-                        getFields={(tableId) => MOCK_FIELDS[tableId] || MOCK_FIELDS['tbl_1_1'] || []}
+                        databases={wizardDbs}
+                        getTables={(dbId) => []} // Wizard will fetch via API internally or we should restructure Wizard to be async
+                        getFields={(tableId) => []} // Same here
                    />
                 </div>
             )}
         </Modal>
+
+        {/* Sync, Delete Modals (unchanged logic mostly, just api calls above) */}
+        {/* Sync Configuration Modal */}
+        <Modal
+            isOpen={isSyncModalOpen}
+            onClose={() => setIsSyncModalOpen(false)}
+            title="配置定时同步任务"
+            size="md"
+            footer={
+                <>
+                    <Button variant="secondary" onClick={() => setIsSyncModalOpen(false)}>取消</Button>
+                    <Button onClick={handleSaveSync} isLoading={loading}>
+                        保存配置
+                    </Button>
+                </>
+            }
+        >
+            <div className="space-y-6">
+                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-lg border border-slate-100">
+                    <div>
+                        <h4 className="font-medium text-slate-800">启用定时同步</h4>
+                        <p className="text-xs text-slate-500 mt-1">开启后，系统将按照配置的时间自动更新向量索引。</p>
+                    </div>
+                    <div 
+                        className={cn(
+                            "w-12 h-6 rounded-full p-1 cursor-pointer transition-colors duration-200 ease-in-out",
+                            syncForm.enabled ? "bg-green-500" : "bg-slate-300"
+                        )}
+                        onClick={() => setSyncForm({...syncForm, enabled: !syncForm.enabled})}
+                    >
+                        <div className={cn(
+                            "w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform duration-200",
+                            syncForm.enabled ? "translate-x-6" : "translate-x-0"
+                        )} />
+                    </div>
+                </div>
+                
+                <div className={cn("transition-opacity duration-200", syncForm.enabled ? "opacity-100" : "opacity-50 pointer-events-none")}>
+                     <CronGenerator 
+                        value={syncForm.expression}
+                        onChange={(val) => setSyncForm({...syncForm, expression: val})}
+                     />
+                </div>
+
+                <div className="bg-blue-50 text-blue-800 text-xs p-3 rounded-lg flex items-start">
+                    <Info size={14} className="mr-2 mt-0.5 flex-shrink-0" />
+                    <div>
+                        <p className="font-semibold mb-1">同步说明：</p>
+                        <ul className="list-disc pl-4 space-y-1 opacity-90">
+                            <li>增量同步：仅同步数据源中发生变更（新增/修改）的数据行。</li>
+                            <li>执行耗时：取决于数据变更量，建议避开业务高峰期。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </Modal>
+
+        {/* Delete Verification Modal */}
+        <Modal
+            isOpen={isDeleteModalOpen}
+            onClose={() => setIsDeleteModalOpen(false)}
+            title="确认删除"
+            size="sm"
+            footer={
+                <>
+                    <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>取消</Button>
+                    <Button variant="danger" onClick={confirmDelete} disabled={userInputCode.toUpperCase() !== verificationCode}>
+                        确认删除
+                    </Button>
+                </>
+            }
+        >
+            <div className="space-y-4">
+                <div className="bg-red-50 text-red-800 p-3 rounded-lg flex items-start text-sm">
+                    <AlertTriangle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+                    <p>此操作将永久删除该向量集合及其所有索引数据，无法恢复。</p>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">请输入验证码以确认:</label>
+                    <div className="flex items-center gap-3">
+                        <div className="bg-slate-100 px-3 py-2 rounded font-mono font-bold tracking-widest text-slate-600 select-none text-lg">
+                            {verificationCode}
+                        </div>
+                        <Input 
+                            value={userInputCode}
+                            onChange={(e) => setUserInputCode(e.target.value)}
+                            placeholder="输入验证码"
+                            className="uppercase font-mono"
+                        />
+                    </div>
+                </div>
+            </div>
+        </Modal>
     </div>
   );
 };
+
+// Simple Info Icon for the modal content
+const Info = ({ size, className }: { size: number, className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+);

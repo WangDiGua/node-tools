@@ -4,7 +4,7 @@ import { MenuManagement } from './settings/MenuManagement';
 import { UserManagement } from './settings/UserManagement';
 import { RoleManagement } from './settings/RoleManagement';
 import { SystemSecurity } from './settings/SystemSecurity';
-import { LogManagement } from './settings/LogManagement';
+import { SystemLogs } from './settings/SystemLogs';
 
 export const Settings: React.FC = () => {
   return (
@@ -20,7 +20,7 @@ export const Settings: React.FC = () => {
             <Route path="users" element={<UserManagement />} />
             <Route path="roles" element={<RoleManagement />} />
             <Route path="security" element={<SystemSecurity />} />
-            <Route path="login-logs" element={<LogManagement />} />
+            <Route path="logs" element={<SystemLogs />} />
         </Routes>
     </div>
   );

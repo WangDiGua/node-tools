@@ -74,43 +74,35 @@ const ToastItem: React.FC<{ toast: Toast; onClose: () => void }> = ({ toast, onC
     warning: <AlertTriangle size={20} className="text-yellow-500" />,
   };
 
-  const bgs = {
-    success: 'bg-white border-green-100',
-    error: 'bg-white border-red-100',
-    info: 'bg-white border-blue-100',
-    warning: 'bg-white border-yellow-100',
+  // Cleaner styles: Left border indicator instead of full colored border/background mix
+  const styles = {
+    success: 'border-l-green-500',
+    error: 'border-l-red-500',
+    info: 'border-l-blue-500',
+    warning: 'border-l-yellow-500',
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -20, scale: 0.9 }}
+      initial={{ opacity: 0, y: -20, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -20, scale: 0.9 }}
+      exit={{ opacity: 0, y: -20, scale: 0.95 }}
       layout
       className={cn(
-        "pointer-events-auto min-w-[300px] max-w-md p-4 rounded-lg shadow-xl border flex items-center gap-3 relative overflow-hidden backdrop-blur-sm bg-white/95",
-        bgs[toast.type]
+        "pointer-events-auto min-w-[300px] max-w-md p-4 rounded-r-lg rounded-l-sm shadow-lg border-y border-r border-slate-100 bg-white flex items-center gap-3 relative border-l-[4px] dark:bg-slate-800 dark:border-slate-700",
+        styles[toast.type]
       )}
     >
         <div className="flex-shrink-0">{icons[toast.type]}</div>
-        <div className="flex-1 text-sm font-medium text-slate-800 break-words">
+        <div className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200 break-words leading-tight">
             {toast.message}
         </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+        <button 
+            onClick={onClose} 
+            className="text-slate-400 hover:text-slate-600 transition-colors dark:hover:text-slate-300 ml-2"
+        >
             <X size={16} />
         </button>
-        {/* Progress bar simulation */}
-        <motion.div 
-            initial={{ width: '100%' }} 
-            animate={{ width: '0%' }} 
-            transition={{ duration: 3, ease: 'linear' }}
-            className={cn(
-                "absolute bottom-0 left-0 h-0.5",
-                toast.type === 'success' ? 'bg-green-500' :
-                toast.type === 'error' ? 'bg-red-500' :
-                toast.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
-            )}
-        />
     </motion.div>
   );
 };

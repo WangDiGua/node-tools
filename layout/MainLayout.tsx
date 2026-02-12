@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { Search, Bell, LogOut, User, Settings, LayoutDashboard, Database, Users, Shield, FileText, List, Lock, Book, Wrench, Eraser } from 'lucide-react';
+import { Search, Bell, LogOut, User, Settings, LayoutDashboard, Database, Users, Shield, FileText, List, Lock, Book, Wrench, Eraser, X, Check } from 'lucide-react';
 import { Input } from '../components/Input';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '../utils';
@@ -23,8 +23,7 @@ const SEARCHABLE_ROUTES = [
   { title: '用户管理', path: '/settings/users', icon: <Users size={16} /> },
   { title: '角色管理', path: '/settings/roles', icon: <Shield size={16} /> },
   { title: '系统安全', path: '/settings/security', icon: <Lock size={16} /> },
-  { title: '登录日志', path: '/settings/login-logs', icon: <FileText size={16} /> },
-  { title: '日志审计', path: '/log-audit', icon: <FileText size={16} /> },
+  { title: '系统日志', path: '/settings/logs', icon: <FileText size={16} /> },
   { title: '个人中心', path: '/profile', icon: <User size={16} /> },
 ];
 
@@ -34,12 +33,60 @@ export const MainLayout: React.FC = () => {
   const { state, dispatch } = useStore();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<typeof SEARCHABLE_ROUTES>([]);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
+
+  // --- Background Task Runner Simulation ---
+  // This ensures tasks progress even when the wizard is closed or user changes pages.
+  useEffect(() => {
+    const interval = setInterval(() => {
+        const activeTasks = state.tasks.filter(t => t.status === 'In Progress');
+        
+        if (activeTasks.length === 0) return;
+
+        activeTasks.forEach(task => {
+            // Simulate progress increment (random 5-15%)
+            let newProgress = task.progress + Math.floor(Math.random() * 10) + 5;
+            
+            if (newProgress >= 100) {
+                newProgress = 100;
+                
+                // 1. Mark as Completed
+                dispatch({
+                    type: 'UPDATE_TASK',
+                    payload: { id: task.id, progress: 100, status: 'Completed' }
+                });
+
+                // 2. Trigger Notification
+                dispatch({
+                    type: 'ADD_NOTIFICATION',
+                    payload: {
+                        id: Date.now().toString(),
+                        title: '后台任务完成',
+                        message: `任务 "${task.name}" 已成功执行完毕。`,
+                        type: 'success',
+                        time: '刚刚',
+                        read: false
+                    }
+                });
+            } else {
+                // Just update progress
+                dispatch({
+                    type: 'UPDATE_TASK',
+                    payload: { id: task.id, progress: newProgress }
+                });
+            }
+        });
+    }, 1500); // Check every 1.5s
+
+    return () => clearInterval(interval);
+  }, [state.tasks]); // Dependency on tasks ensures we have latest state
 
   const handleLogout = () => {
     localStorage.removeItem(APP_CONFIG.STORAGE_KEYS.TOKEN);
@@ -77,10 +124,21 @@ export const MainLayout: React.FC = () => {
     setShowSearchDropdown(false);
   };
 
+  const handleMarkAllRead = () => {
+      dispatch({ type: 'MARK_ALL_READ' });
+  };
+
+  const handleClearNotifications = () => {
+      dispatch({ type: 'CLEAR_NOTIFICATIONS' });
+  };
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
         if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
             setShowSearchDropdown(false);
+        }
+        if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+            setShowNotifications(false);
         }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -120,6 +178,8 @@ export const MainLayout: React.FC = () => {
 
   const pageVariants = getPageVariants(state.pageTransition);
   const user = state.user || { username: 'Guest', role: 'viewer', email: 'guest@vector.com', avatar: 'GU' };
+  
+  const unreadCount = state.notifications.filter(n => !n.read).length;
 
   return (
     <div className="flex h-screen bg-background overflow-hidden dark:bg-slate-950">
@@ -181,10 +241,60 @@ export const MainLayout: React.FC = () => {
                 <Settings size={20} />
              </button>
 
-             <button className="text-slate-500 hover:text-primary transition-colors relative p-2 hover:bg-slate-100 rounded-full dark:text-slate-400 dark:hover:bg-slate-800">
-                <Bell size={20} />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white dark:ring-slate-900"></span>
-             </button>
+             {/* Notification Bell */}
+             <div className="relative" ref={notificationRef}>
+                 <button 
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    className="text-slate-500 hover:text-primary transition-colors relative p-2 hover:bg-slate-100 rounded-full dark:text-slate-400 dark:hover:bg-slate-800"
+                 >
+                    <Bell size={20} />
+                    {unreadCount > 0 && (
+                        <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center border-2 border-white dark:border-slate-900 font-bold">
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                    )}
+                 </button>
+
+                 <AnimatePresence>
+                    {showNotifications && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            transition={{ duration: 0.15 }}
+                            className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-100 ring-1 ring-black ring-opacity-5 z-50 overflow-hidden dark:bg-slate-800 dark:border-slate-700"
+                        >
+                            <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800 dark:border-slate-700">
+                                <h3 className="font-semibold text-sm text-slate-800 dark:text-white">系统通知</h3>
+                                <div className="flex gap-2">
+                                    <button onClick={handleMarkAllRead} className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400" title="全部已读">
+                                        <Check size={14} />
+                                    </button>
+                                    <button onClick={handleClearNotifications} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" title="清空">
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="max-h-80 overflow-y-auto custom-scrollbar">
+                                {state.notifications.length === 0 ? (
+                                    <div className="p-8 text-center text-slate-400 text-sm">暂无新通知</div>
+                                ) : (
+                                    state.notifications.map((note) => (
+                                        <div key={note.id} className={cn("px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors last:border-0 relative dark:border-slate-700 dark:hover:bg-slate-700", !note.read && "bg-blue-50/30 dark:bg-blue-900/10")}>
+                                            {!note.read && <div className="absolute left-2 top-4 w-1.5 h-1.5 bg-blue-500 rounded-full"></div>}
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className="font-medium text-sm text-slate-800 dark:text-slate-200 pl-2">{note.title}</span>
+                                                <span className="text-[10px] text-slate-400">{note.time}</span>
+                                            </div>
+                                            <p className="text-xs text-slate-500 pl-2 leading-relaxed dark:text-slate-400">{note.message}</p>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
+                 </AnimatePresence>
+             </div>
 
              <div className="relative">
                 <button 

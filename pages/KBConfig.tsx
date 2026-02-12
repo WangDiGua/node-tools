@@ -2,6 +2,7 @@ import React from 'react';
 import { Book, Settings, Save } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { Select } from '../components/Select';
 
 export const KBConfig: React.FC = () => {
   return (
@@ -27,21 +28,25 @@ export const KBConfig: React.FC = () => {
                 <Input label="索引分片大小 (Chunk Size)" placeholder="512" className="dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
                 
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">检索模式</label>
-                    <select className="block w-full rounded-lg border border-slate-300 bg-white py-2.5 px-3 text-sm focus:border-blue-500 focus:outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white">
-                        <option>Hybrid (混合检索)</option>
-                        <option>Dense (向量检索)</option>
-                        <option>Sparse (关键词检索)</option>
-                    </select>
+                    <Select 
+                        label="检索模式" 
+                        options={[
+                            { label: 'Hybrid (混合检索)', value: 'hybrid' },
+                            { label: 'Dense (向量检索)', value: 'dense' },
+                            { label: 'Sparse (关键词检索)', value: 'sparse' },
+                        ]}
+                    />
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Embedding 模型</label>
-                    <select className="block w-full rounded-lg border border-slate-300 bg-white py-2.5 px-3 text-sm focus:border-blue-500 focus:outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white">
-                        <option>text-embedding-3-small</option>
-                        <option>text-embedding-3-large</option>
-                        <option>m3e-base</option>
-                    </select>
+                    <Select 
+                        label="Embedding 模型"
+                        options={[
+                            { label: 'text-embedding-3-small', value: 'te3s' },
+                            { label: 'text-embedding-3-large', value: 'te3l' },
+                            { label: 'm3e-base', value: 'm3e' },
+                        ]}
+                    />
                 </div>
             </div>
 

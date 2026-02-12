@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Edit2 } from 'lucide-react';
 import { cn } from '../../utils';
+import { Button } from '../../components/Button';
+import { Modal } from '../../components/Modal';
+import { Input } from '../../components/Input';
+import { useToast } from '../../components/Toast';
 
 export const MenuManagement: React.FC = () => {
+    const { success } = useToast();
     // Mock Menu Data structure
     const [menus, setMenus] = useState([
         { id: 1, name: '仪表盘', path: '/dashboard', visible: true, roles: ['admin', 'editor', 'viewer'] },
@@ -19,10 +24,12 @@ export const MenuManagement: React.FC = () => {
         { id: 52, name: '├─ 角色管理', path: '/settings/roles', visible: true, roles: ['admin'] },
         { id: 53, name: '├─ 用户管理', path: '/settings/users', visible: true, roles: ['admin'] },
         { id: 54, name: '├─ 系统安全', path: '/settings/security', visible: true, roles: ['admin'] },
-        { id: 55, name: '├─ 登录日志', path: '/settings/login-logs', visible: true, roles: ['admin'] },
-        { id: 6, name: '日志审计', path: '/log-audit', visible: true, roles: ['admin'] },
+        { id: 55, name: '├─ 系统日志', path: '/settings/logs', visible: true, roles: ['admin'] },
         { id: 7, name: 'API 文档', path: 'external-docs', visible: false, roles: ['admin', 'editor'] },
     ]);
+
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingMenu, setEditingMenu] = useState<{id: number, name: string, path: string} | null>(null);
 
     const toggleVisibility = (id: number) => {
         setMenus(menus.map(m => m.id === id ? { ...m, visible: !m.visible } : m));
@@ -36,6 +43,19 @@ export const MenuManagement: React.FC = () => {
                 : [...m.roles, role];
             return { ...m, roles: newRoles };
         }));
+    };
+
+    const openEditModal = (menu: any) => {
+        setEditingMenu({ id: menu.id, name: menu.name, path: menu.path });
+        setIsEditModalOpen(true);
+    };
+
+    const handleSaveEdit = () => {
+        if (editingMenu) {
+            setMenus(menus.map(m => m.id === editingMenu.id ? { ...m, name: editingMenu.name, path: editingMenu.path } : m));
+            success('菜单更新成功');
+            setIsEditModalOpen(false);
+        }
     };
 
     const allRoles = ['admin', 'editor', 'viewer'];
@@ -54,6 +74,7 @@ export const MenuManagement: React.FC = () => {
                             <th className="px-6 py-4">路由路径</th>
                             <th className="px-6 py-4 text-center">显示状态</th>
                             <th className="px-6 py-4">允许访问的角色</th>
+                            <th className="px-6 py-4 text-right">操作</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -97,11 +118,42 @@ export const MenuManagement: React.FC = () => {
                                         ))}
                                     </div>
                                 </td>
+                                <td className="px-6 py-4 text-right">
+                                    <Button size="sm" variant="secondary" onClick={() => openEditModal(menu)} className="h-8 px-2">
+                                        <Edit2 size={14} />
+                                    </Button>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
+
+            <Modal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                title="编辑菜单"
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>取消</Button>
+                        <Button onClick={handleSaveEdit}>保存</Button>
+                    </>
+                }
+            >
+                <div className="space-y-4">
+                    <Input 
+                        label="菜单名称" 
+                        value={editingMenu?.name || ''} 
+                        onChange={e => setEditingMenu(prev => prev ? {...prev, name: e.target.value} : null)}
+                    />
+                    <Input 
+                        label="路由路径" 
+                        value={editingMenu?.path || ''} 
+                        onChange={e => setEditingMenu(prev => prev ? {...prev, path: e.target.value} : null)}
+                    />
+                </div>
+            </Modal>
         </div>
     );
 };

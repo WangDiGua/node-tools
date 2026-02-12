@@ -9,7 +9,10 @@ export const LogManagement: React.FC = () => {
         id: `log_${i}`,
         action: i % 2 === 0 ? 'UPDATE_VECTOR' : 'LOGIN_ATTEMPT',
         module: i % 2 === 0 ? 'VectorModule' : 'AuthModule',
+        type: i % 2 === 0 ? 'operation' : 'login',
         user: i % 3 === 0 ? 'admin' : 'system_bot',
+        ip: `192.168.1.${100 + i}`,
+        details: 'Mock log details',
         timestamp: new Date(Date.now() - i * 3600000).toISOString(),
         status: i === 4 ? 'failure' : 'success'
     }));

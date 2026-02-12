@@ -66,19 +66,16 @@ const menuItems = [
       { title: '角色管理', path: '/settings/roles', icon: <Shield size={18} /> },
       { title: '用户管理', path: '/settings/users', icon: <Users size={18} /> },
       { title: '系统安全', path: '/settings/security', icon: <Lock size={18} /> },
-      { title: '登录日志', path: '/settings/login-logs', icon: <FileText size={18} /> },
+      // Combined Logs
+      { title: '系统日志', path: '/settings/logs', icon: <FileText size={18} /> },
     ]
   },
-  {
-    title: '日志审计',
-    icon: <FileText size={20} />,
-    path: '/log-audit'
-  },
+  // Removed "Log Audit" from top level
   {
     title: 'API 文档',
     icon: <BookOpen size={20} />,
-    path: 'external-docs', // Special marker
-    isExternal: true
+    path: '/api-docs', // Changed from external to internal route
+    isExternal: false
   }
 ];
 
@@ -91,20 +88,25 @@ export const Sidebar: React.FC = () => {
     const parent = menuItems.find(item => 
         item.children && item.children.some(child => location.pathname.startsWith(child.path))
     );
-    if (parent && !expandedMenus.includes(parent.title)) {
-        setExpandedMenus(prev => [...prev, parent.title]);
+    if (parent) {
+        setExpandedMenus(prev => {
+           // If it's already the only one open, don't update to avoid render cycles
+           if (prev.length === 1 && prev[0] === parent.title) return prev;
+           return [parent.title];
+        });
     }
   }, [location.pathname]);
 
   const toggleMenu = (title: string) => {
     setExpandedMenus(prev => 
       prev.includes(title) 
-        ? prev.filter(t => t !== title) 
-        : [...prev, title]
+        ? [] // Close if currently open
+        : [title] // Open this one and close others (Accordion style)
     );
   };
 
   const handleExternalClick = (e: React.MouseEvent) => {
+    // Kept for backward compatibility if we add external links later
     e.preventDefault();
     window.open(`${APP_CONFIG.API_BASE_URL}/docs`, '_blank');
   };
@@ -183,38 +185,24 @@ export const Sidebar: React.FC = () => {
                 </AnimatePresence>
               </div>
             ) : (
-                item.isExternal ? (
-                    <a
-                        href="#"
-                        onClick={handleExternalClick}
-                        className={cn(
-                            'group flex items-center px-3 py-2.5 text-sm font-medium rounded-md mb-1 transition-all duration-200',
-                            'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'
-                        )}
-                    >
-                         <span className="mr-3 text-slate-500 group-hover:text-slate-700 dark:text-slate-400 dark:group-hover:text-white transition-colors">{item.icon}</span>
-                         {item.title}
-                    </a>
-                ) : (
-                  <NavLink
-                    to={item.path}
-                    className={({ isActive }) =>
-                      cn(
-                        'group flex items-center px-3 py-2.5 text-sm font-medium rounded-md mb-1 transition-all duration-200',
-                        isActive
-                          ? 'bg-primary text-white shadow-md shadow-blue-500/20'
-                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'
-                      )
-                    }
-                  >
-                     {({ isActive }) => (
-                        <>
-                            <span className={cn("mr-3 transition-colors", isActive ? "text-white" : "text-slate-500 group-hover:text-slate-700 dark:text-slate-400 dark:group-hover:text-white")}>{item.icon}</span>
-                            {item.title}
-                        </>
-                     )}
-                  </NavLink>
-                )
+                <NavLink
+                  to={item.path}
+                  className={({ isActive }) =>
+                    cn(
+                      'group flex items-center px-3 py-2.5 text-sm font-medium rounded-md mb-1 transition-all duration-200',
+                      isActive
+                        ? 'bg-primary text-white shadow-md shadow-blue-500/20'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'
+                    )
+                  }
+                >
+                    {({ isActive }) => (
+                      <>
+                          <span className={cn("mr-3 transition-colors", isActive ? "text-white" : "text-slate-500 group-hover:text-slate-700 dark:text-slate-400 dark:group-hover:text-white")}>{item.icon}</span>
+                          {item.title}
+                      </>
+                    )}
+                </NavLink>
             )}
           </div>
         ))}

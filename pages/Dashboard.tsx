@@ -1,26 +1,11 @@
-import React, { useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Database, Activity, AlertTriangle, CheckCircle } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Database, Activity, AlertTriangle, CheckCircle, Cpu, HardDrive, Server, Network } from 'lucide-react';
 import { cn } from '../utils';
 import { motion } from 'framer-motion';
-
-// Mock Data
-const statsData = [
-  { name: '周一', vectors: 4000, queries: 2400 },
-  { name: '周二', vectors: 3000, queries: 1398 },
-  { name: '周三', vectors: 2000, queries: 9800 },
-  { name: '周四', vectors: 2780, queries: 3908 },
-  { name: '周五', vectors: 1890, queries: 4800 },
-  { name: '周六', vectors: 2390, queries: 3800 },
-  { name: '周日', vectors: 3490, queries: 4300 },
-];
-
-const tasksData = [
-    { id: 1, name: '索引更新: 维基百科数据转储', status: 'In Progress', progress: 45, time: '2分钟前' },
-    { id: 2, name: '向量重平衡', status: 'Pending', progress: 0, time: '1小时前' },
-    { id: 3, name: '每日数据备份', status: 'Completed', progress: 100, time: '5小时前' },
-    { id: 4, name: '模型同步任务', status: 'Failed', progress: 88, time: '1天前' },
-];
+import { Chart } from '../components/Chart';
+import * as echarts from 'echarts';
+import { useStore } from '../store';
+import { dashboardApi } from '../api';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -39,27 +24,177 @@ const itemVariants = {
 
 export const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'stats' | 'console'>('stats');
+  const { state } = useStore();
+  const isDark = state.themeMode === 'dark';
+  
+  const [statsData, setStatsData] = useState<any>({ trend: [] });
+  const [resources, setResources] = useState<any>({});
+  const [nodes, setNodes] = useState<any[]>([]);
+  // Use global tasks from store which are now fetched via API in MainLayout (or here)
+  // For this implementation, we will fetch initial state here as well.
+  
+  useEffect(() => {
+      const loadData = async () => {
+          try {
+              if (activeTab === 'stats') {
+                  const res = await dashboardApi.getStats();
+                  if(res.code === 200) setStatsData(res.data);
+              } else {
+                  const resRes = await dashboardApi.getResources();
+                  if(resRes.code === 200) setResources(resRes.data);
+                  
+                  const resNodes = await dashboardApi.getNodes();
+                  if(resNodes.code === 200) setNodes(resNodes.data);
+              }
+          } catch (e) {
+              console.error(e);
+          }
+      };
+      loadData();
+  }, [activeTab]);
+
+  // Combine global tasks with backend tasks if needed, 
+  // currently MainLayout handles the polling into global Store.
+  const displayTasks = state.tasks;
+
+  // --- Chart Options Configuration ---
+  
+  // Bar Chart: Vector Ingestion
+  const barOption = useMemo<echarts.EChartsOption>(() => ({
+      backgroundColor: 'transparent',
+      tooltip: {
+          trigger: 'axis',
+          axisPointer: { type: 'shadow' },
+          backgroundColor: isDark ? 'rgba(30, 41, 59, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+          borderColor: isDark ? '#334155' : '#e2e8f0',
+          textStyle: { color: isDark ? '#f8fafc' : '#1e293b' }
+      },
+      grid: {
+          top: '15%',
+          right: '5%',
+          bottom: '10%',
+          left: '10%',
+          containLabel: false
+      },
+      xAxis: {
+          type: 'category',
+          data: statsData.trend?.map((item: any) => item.name) || [],
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { color: '#64748b' }
+      },
+      yAxis: {
+          type: 'value',
+          splitLine: { 
+              lineStyle: { 
+                  type: 'dashed',
+                  color: isDark ? '#334155' : '#e2e8f0' 
+              } 
+          },
+          axisLabel: { color: '#64748b' }
+      },
+      series: [
+          {
+              name: '新增向量',
+              type: 'bar',
+              barWidth: '40%',
+              data: statsData.trend?.map((item: any) => item.vectors) || [],
+              itemStyle: {
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                      { offset: 0, color: '#3b82f6' },
+                      { offset: 1, color: '#60a5fa' }
+                  ]),
+                  borderRadius: [4, 4, 0, 0]
+              }
+          }
+      ]
+  }), [isDark, statsData]);
+
+  // Line Chart: Query Performance
+  const lineOption = useMemo<echarts.EChartsOption>(() => ({
+      backgroundColor: 'transparent',
+      tooltip: {
+          trigger: 'axis',
+          backgroundColor: isDark ? 'rgba(30, 41, 59, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+          borderColor: isDark ? '#334155' : '#e2e8f0',
+          textStyle: { color: isDark ? '#f8fafc' : '#1e293b' }
+      },
+      grid: {
+          top: '15%',
+          right: '5%',
+          bottom: '10%',
+          left: '10%',
+          containLabel: false
+      },
+      xAxis: {
+          type: 'category',
+          boundaryGap: false,
+          data: statsData.trend?.map((item: any) => item.name) || [],
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { color: '#64748b' }
+      },
+      yAxis: {
+          type: 'value',
+          splitLine: { 
+              lineStyle: { 
+                  type: 'dashed',
+                  color: isDark ? '#334155' : '#e2e8f0' 
+              } 
+          },
+          axisLabel: { color: '#64748b' }
+      },
+      series: [
+          {
+              name: '查询延迟 (ms)',
+              type: 'line',
+              smooth: true,
+              showSymbol: false,
+              symbolSize: 8,
+              data: statsData.trend?.map((item: any) => item.queries) || [],
+              itemStyle: {
+                  color: '#8b5cf6'
+              },
+              areaStyle: {
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                      { offset: 0, color: 'rgba(139, 92, 246, 0.3)' },
+                      { offset: 1, color: 'rgba(139, 92, 246, 0.01)' }
+                  ])
+              },
+              lineStyle: {
+                  width: 3,
+                  shadowColor: 'rgba(139, 92, 246, 0.3)',
+                  shadowBlur: 10,
+                  shadowOffsetY: 5
+              }
+          }
+      ]
+  }), [isDark, statsData]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center space-x-1 bg-slate-200 p-1 rounded-lg w-fit">
+      <div className="flex items-center space-x-1 bg-slate-200 p-1 rounded-lg w-fit dark:bg-slate-800">
         <button
           onClick={() => setActiveTab('stats')}
           className={cn(
             'px-4 py-2 rounded-md text-sm font-medium transition-all duration-200',
-            activeTab === 'stats' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            activeTab === 'stats' 
+                ? 'bg-white text-blue-600 shadow-sm dark:bg-slate-700 dark:text-blue-400' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-slate-400 dark:hover:bg-slate-700/50'
           )}
         >
-          统计数据
+          业务统计
         </button>
         <button
           onClick={() => setActiveTab('console')}
           className={cn(
             'px-4 py-2 rounded-md text-sm font-medium transition-all duration-200',
-            activeTab === 'console' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            activeTab === 'console' 
+                ? 'bg-white text-blue-600 shadow-sm dark:bg-slate-700 dark:text-blue-400' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-slate-400 dark:hover:bg-slate-700/50'
           )}
         >
-          控制台 & 任务
+          系统控制台
         </button>
       </div>
 
@@ -72,46 +207,25 @@ export const Dashboard: React.FC = () => {
         >
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="向量总数" value="1,293,302" icon={<Database className="text-blue-500" />} trend="+12.5%" />
-                <StatCard title="每日查询" value="45,231" icon={<Activity className="text-purple-500" />} trend="+4.3%" />
-                <StatCard title="活跃节点" value="24" icon={<CheckCircle className="text-green-500" />} trend="稳定" />
-                <StatCard title="索引错误" value="3" icon={<AlertTriangle className="text-red-500" />} trend="-2" isNegative />
+                <StatCard title="向量总数" value={statsData.totalVectors || '-'} icon={<Database className="text-blue-500" />} trend="+12.5%" />
+                <StatCard title="每日查询" value={statsData.dailyQueries || '-'} icon={<Activity className="text-purple-500" />} trend="+4.3%" />
+                <StatCard title="活跃节点" value={statsData.activeNodes || '-'} icon={<CheckCircle className="text-green-500" />} trend="稳定" />
+                <StatCard title="索引错误" value={statsData.errors || '0'} icon={<AlertTriangle className="text-red-500" />} trend="-2" isNegative />
             </div>
 
-            {/* Charts */}
+            {/* Charts with ECharts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <motion.div variants={itemVariants} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                    <h3 className="text-lg font-semibold text-slate-800 mb-4">向量入库趋势</h3>
-                    <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={statsData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                <XAxis dataKey="name" tick={{fill: '#64748b'}} axisLine={false} tickLine={false} />
-                                <YAxis tick={{fill: '#64748b'}} axisLine={false} tickLine={false} />
-                                <Tooltip 
-                                    cursor={{fill: '#f1f5f9'}}
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                />
-                                <Bar dataKey="vectors" fill="#3b82f6" radius={[4, 4, 0, 0]} animationDuration={1500} />
-                            </BarChart>
-                        </ResponsiveContainer>
+                <motion.div variants={itemVariants} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 dark:bg-slate-900 dark:border-slate-800">
+                    <h3 className="text-lg font-semibold text-slate-800 mb-4 dark:text-white">向量入库趋势</h3>
+                    <div className="h-80 w-full">
+                        <Chart options={barOption} loading={!statsData.trend} />
                     </div>
                 </motion.div>
 
-                <motion.div variants={itemVariants} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                    <h3 className="text-lg font-semibold text-slate-800 mb-4">查询延迟 (ms)</h3>
-                    <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={statsData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                <XAxis dataKey="name" tick={{fill: '#64748b'}} axisLine={false} tickLine={false} />
-                                <YAxis tick={{fill: '#64748b'}} axisLine={false} tickLine={false} />
-                                <Tooltip 
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                />
-                                <Line type="monotone" dataKey="queries" stroke="#8b5cf6" strokeWidth={3} dot={{r: 4, fill: '#8b5cf6', strokeWidth: 0}} activeDot={{r: 6}} animationDuration={1500} />
-                            </LineChart>
-                        </ResponsiveContainer>
+                <motion.div variants={itemVariants} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 dark:bg-slate-900 dark:border-slate-800">
+                    <h3 className="text-lg font-semibold text-slate-800 mb-4 dark:text-white">查询延迟 (ms)</h3>
+                    <div className="h-80 w-full">
+                         <Chart options={lineOption} loading={!statsData.trend} />
                     </div>
                 </motion.div>
             </div>
@@ -120,91 +234,155 @@ export const Dashboard: React.FC = () => {
 
       {activeTab === 'console' && (
         <motion.div 
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3 }}
-            className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden"
+            variants={containerVariants}
+            initial="hidden"
+            animate="show"
+            className="grid grid-cols-1 lg:grid-cols-3 gap-6"
         >
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                <h3 className="font-semibold text-slate-800">系统任务控制台</h3>
-                <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded animate-pulse">实时更新中</span>
-            </div>
-            <div className="divide-y divide-slate-100">
-                {tasksData.map((task, index) => (
-                    <div key={task.id} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                        <div className="flex-1">
-                            <div className="flex items-center mb-1">
-                                <h4 className="font-medium text-slate-900 mr-3">{task.name}</h4>
-                                <StatusBadge status={task.status} />
-                            </div>
-                            <div className="w-full max-w-md bg-slate-100 rounded-full h-2 mt-2">
-                                <motion.div 
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${task.progress}%` }}
-                                    transition={{ duration: 1, delay: index * 0.1 }}
-                                    className={cn("h-2 rounded-full", 
-                                        task.status === 'Completed' ? 'bg-green-500' : 
-                                        task.status === 'Failed' ? 'bg-red-500' : 'bg-blue-500'
-                                    )}
-                                ></motion.div>
-                            </div>
-                        </div>
-                        <div className="text-sm text-slate-400 font-mono ml-4 whitespace-nowrap">
-                            {task.time}
-                        </div>
+            {/* Left Column: System Resources */}
+            <motion.div variants={itemVariants} className="lg:col-span-2 space-y-6">
+                {/* Resource Monitor */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 dark:bg-slate-900 dark:border-slate-800">
+                    <h3 className="font-semibold text-slate-800 mb-4 dark:text-white flex items-center">
+                        <Activity size={18} className="mr-2 text-blue-500" /> 
+                        系统资源监控
+                    </h3>
+                    <div className="grid grid-cols-3 gap-4">
+                        <ResourceGauge label="CPU 使用率" value={resources.cpu || 0} icon={<Cpu size={20} />} color="text-blue-500" />
+                        <ResourceGauge label="内存占用" value={resources.memory || 0} icon={<HardDrive size={20} />} color="text-purple-500" />
+                        <ResourceGauge label="磁盘 I/O" value={resources.disk || 0} icon={<Server size={20} />} color="text-green-500" />
                     </div>
-                ))}
-            </div>
-            
-             {/* Fake Console Logs */}
-             <div className="bg-slate-900 p-4 text-xs font-mono text-slate-300 h-64 overflow-y-auto mt-0 custom-scrollbar">
-                <div className="text-green-400 mb-1">$ systemctl status vector-engine</div>
-                <div className="mb-1">[INFO] Vector engine running on port 8080</div>
-                <div className="mb-1">[INFO] Connected to storage cluster (Node A, Node B)</div>
-                <div className="text-yellow-400 mb-1">[WARN] High memory usage detected on shard_02 (85%)</div>
-                <div className="mb-1">[INFO] Auto-scaling triggered...</div>
-                <div className="mb-1">[INFO] New node provisioned successfully.</div>
-                <div className="text-blue-400 mb-1 animate-pulse">_ cursor blinking...</div>
-             </div>
+                </div>
+
+                {/* Task List */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden dark:bg-slate-900 dark:border-slate-800">
+                    <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800 dark:border-slate-700">
+                        <h3 className="font-semibold text-slate-800 dark:text-white">后台任务队列</h3>
+                        <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded animate-pulse dark:bg-slate-700 dark:text-slate-300">
+                            {displayTasks.filter(t => t.status === 'In Progress').length} 个进行中
+                        </span>
+                    </div>
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[400px] overflow-y-auto">
+                        {displayTasks.map((task, index) => (
+                            <div key={task.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors dark:hover:bg-slate-800">
+                                <div className="flex-1">
+                                    <div className="flex items-center mb-1">
+                                        <h4 className="font-medium text-sm text-slate-900 mr-3 dark:text-slate-200">{task.name}</h4>
+                                        <StatusBadge status={task.status} />
+                                    </div>
+                                    <div className="w-full max-w-xs bg-slate-100 rounded-full h-1.5 mt-2 dark:bg-slate-700">
+                                        <motion.div 
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${task.progress}%` }}
+                                            transition={{ duration: 0.5 }}
+                                            className={cn("h-1.5 rounded-full", 
+                                                task.status === 'Completed' ? 'bg-green-500' : 
+                                                task.status === 'Failed' ? 'bg-red-500' : 'bg-blue-500'
+                                            )}
+                                        ></motion.div>
+                                    </div>
+                                </div>
+                                <div className="text-xs text-slate-400 font-mono ml-4 whitespace-nowrap">
+                                    {new Date(task.startTime).toLocaleTimeString()}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </motion.div>
+
+            {/* Right Column: Node Status & Terminal */}
+            <motion.div variants={itemVariants} className="space-y-6">
+                {/* Active Nodes */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 dark:bg-slate-900 dark:border-slate-800">
+                    <h3 className="font-semibold text-slate-800 mb-4 dark:text-white flex items-center">
+                        <Network size={18} className="mr-2 text-indigo-500" />
+                        集群节点状态
+                    </h3>
+                    <div className="space-y-3">
+                        {nodes.map(node => (
+                            <div key={node.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg dark:bg-slate-800">
+                                <div className="flex items-center gap-3">
+                                    <div className={cn("w-2 h-2 rounded-full", node.status === 'active' ? 'bg-green-500' : 'bg-yellow-500')}></div>
+                                    <div>
+                                        <div className="text-xs font-mono font-medium dark:text-slate-200">{node.id}</div>
+                                        <div className="text-[10px] text-slate-400">{node.ip}</div>
+                                    </div>
+                                </div>
+                                <span className={cn("text-xs font-medium px-2 py-0.5 rounded", 
+                                    parseInt(node.load) > 80 ? "text-red-600 bg-red-50 dark:bg-red-900/20" : "text-slate-600 bg-slate-200 dark:bg-slate-700 dark:text-slate-300"
+                                )}>
+                                    Load: {node.load}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Console Terminal */}
+                <div className="bg-slate-900 rounded-xl overflow-hidden flex flex-col h-[280px] shadow-lg">
+                    <div className="px-4 py-2 bg-slate-800 border-b border-slate-700 flex items-center gap-2">
+                        <div className="flex gap-1.5">
+                            <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
+                            <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+                        </div>
+                        <span className="text-xs text-slate-400 font-mono ml-2">root@vector-admin:~</span>
+                    </div>
+                    <div className="p-4 text-xs font-mono text-slate-300 overflow-y-auto flex-1 custom-scrollbar">
+                        <div className="text-green-400 mb-1">$ systemctl status vector-engine</div>
+                        <div className="mb-1 opacity-80">[INFO] Vector engine running on port 8080</div>
+                        <div className="mb-1 opacity-80">[INFO] Connected to storage cluster (Node A, Node B)</div>
+                        <div className="text-blue-400 mb-1 animate-pulse">_ cursor blinking...</div>
+                    </div>
+                </div>
+            </motion.div>
         </motion.div>
       )}
     </div>
   );
 };
 
+const ResourceGauge = ({ label, value, icon, color }: any) => (
+    <div className="flex flex-col items-center justify-center p-4 bg-slate-50 rounded-lg dark:bg-slate-800">
+        <div className={cn("mb-2 p-2 rounded-full bg-white dark:bg-slate-700 shadow-sm", color)}>
+            {icon}
+        </div>
+        <div className="text-2xl font-bold text-slate-800 dark:text-white">{value}%</div>
+        <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
+        <div className="w-full h-1.5 bg-slate-200 rounded-full mt-3 dark:bg-slate-700 overflow-hidden">
+            <div className={cn("h-full rounded-full opacity-80", color.replace('text-', 'bg-'))} style={{ width: `${value}%` }}></div>
+        </div>
+    </div>
+);
+
 const StatCard = ({ title, value, icon, trend, isNegative }: any) => (
     <motion.div 
         variants={itemVariants}
         whileHover={{ y: -5, boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }}
-        className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 transition-all cursor-default"
+        className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 transition-all cursor-default dark:bg-slate-900 dark:border-slate-800"
     >
         <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-slate-50 rounded-lg">{icon}</div>
-            <span className={cn("text-xs font-medium px-2 py-1 rounded-full", isNegative ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600")}>
+            <div className="p-2 bg-slate-50 rounded-lg dark:bg-slate-800">{icon}</div>
+            <span className={cn("text-xs font-medium px-2 py-1 rounded-full", isNegative ? "bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400" : "bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400")}>
                 {trend}
             </span>
         </div>
-        <div className="text-3xl font-bold text-slate-800 mb-1">{value}</div>
-        <div className="text-sm text-slate-500">{title}</div>
+        <div className="text-3xl font-bold text-slate-800 mb-1 dark:text-white">{value}</div>
+        <div className="text-sm text-slate-500 dark:text-slate-400">{title}</div>
     </motion.div>
 );
 
 const StatusBadge = ({ status }: { status: string }) => {
     const styles: Record<string, string> = {
-        'In Progress': 'bg-blue-100 text-blue-700',
-        'Pending': 'bg-yellow-100 text-yellow-700',
-        'Completed': 'bg-green-100 text-green-700',
-        'Failed': 'bg-red-100 text-red-700',
-    };
-    const labels: Record<string, string> = {
-        'In Progress': '进行中',
-        'Pending': '等待中',
-        'Completed': '已完成',
-        'Failed': '失败',
+        'In Progress': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+        'Pending': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+        'Completed': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+        'Failed': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
     };
     return (
-        <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium", styles[status] || 'bg-gray-100 text-gray-800')}>
-            {labels[status] || status}
+        <span className={cn("px-2.5 py-0.5 rounded-full text-[10px] font-medium uppercase", styles[status] || 'bg-gray-100 text-gray-800')}>
+            {status}
         </span>
     );
 };
