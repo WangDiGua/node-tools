@@ -7,10 +7,13 @@ interface MockUser extends User {
 
 interface Menu {
   id: number;
-  name: string;
+  parentId: number;
+  title: string;
   path: string;
   visible: boolean;
   roles: string[];
+  icon: string;
+  // Dynamic
   children?: Menu[];
 }
 
@@ -31,24 +34,31 @@ const db = {
     { id: '3', username: 'viewer', password: '123', email: 'viewer@vector.com', role: 'viewer', status: 'active', avatar: 'VI', phone: '13700000003', gender: 'other', age: 25, lastLogin: new Date().toISOString() },
   ] as MockUser[],
 
+  // Flattened structure matching SQL INSERT
   menus: [
-    { id: 1, name: '仪表盘', path: '/dashboard', visible: true, roles: ['admin', 'editor', 'viewer'] },
-    { id: 2, name: '向量管理', path: '/vector', visible: true, roles: ['admin', 'editor'] },
-    { id: 3, name: '向量搜索', path: '/vector-search', visible: true, roles: ['admin', 'editor', 'viewer'] },
-    { id: 4, name: '知识库配置', path: '/kb/config', visible: true, roles: ['admin', 'editor'] },
-    { id: 5, name: '知识库检索', path: '/kb/retrieval', visible: true, roles: ['admin', 'editor', 'viewer'] },
-    { id: 6, name: '大模型输出清洁', path: '/tools/llm-clean', visible: true, roles: ['admin', 'editor'] },
-    { id: 7, name: '菜单管理', path: '/settings/menus', visible: true, roles: ['admin'] },
-    { id: 8, name: '角色管理', path: '/settings/roles', visible: true, roles: ['admin'] },
-    { id: 9, name: '用户管理', path: '/settings/users', visible: true, roles: ['admin'] },
-    { id: 10, name: '系统安全', path: '/settings/security', visible: true, roles: ['admin'] },
-    { id: 11, name: '系统日志', path: '/settings/logs', visible: true, roles: ['admin'] },
+    { id: 1, parentId: 0, title: '仪表盘', path: '/dashboard', visible: true, roles: ['admin', 'editor', 'viewer'], icon: 'LayoutDashboard' },
+    { id: 2, parentId: 0, title: '向量配置', path: '/vector-config', visible: true, roles: ['admin', 'editor', 'viewer'], icon: 'Database' },
+    { id: 3, parentId: 2, title: '向量管理', path: '/vector', visible: true, roles: ['admin', 'editor'], icon: 'Database' },
+    { id: 4, parentId: 2, title: '向量搜索', path: '/vector-search', visible: true, roles: ['admin', 'editor', 'viewer'], icon: 'Search' },
+    { id: 5, parentId: 0, title: '知识库', path: '/kb', visible: true, roles: ['admin', 'editor', 'viewer'], icon: 'Book' },
+    { id: 6, parentId: 5, title: '知识库配置', path: '/kb/config', visible: true, roles: ['admin', 'editor'], icon: 'Settings' },
+    { id: 7, parentId: 5, title: '知识库检索', path: '/kb/retrieval', visible: true, roles: ['admin', 'editor', 'viewer'], icon: 'Search' },
+    { id: 8, parentId: 0, title: '节点工具', path: '/tools', visible: true, roles: ['admin', 'editor'], icon: 'Wrench' },
+    { id: 9, parentId: 8, title: '大模型输出清洁', path: '/tools/llm-clean', visible: true, roles: ['admin', 'editor'], icon: 'Eraser' },
+    { id: 10, parentId: 0, title: '系统设置', path: '/settings', visible: true, roles: ['admin'], icon: 'Settings' },
+    { id: 11, parentId: 10, title: '菜单管理', path: '/settings/menus', visible: true, roles: ['admin'], icon: 'List' },
+    { id: 12, parentId: 10, title: '角色管理', path: '/settings/roles', visible: true, roles: ['admin'], icon: 'Shield' },
+    { id: 13, parentId: 10, title: '用户管理', path: '/settings/users', visible: true, roles: ['admin'], icon: 'Users' },
+    { id: 14, parentId: 10, title: '系统安全', path: '/settings/security', visible: true, roles: ['admin'], icon: 'Lock' },
+    { id: 15, parentId: 10, title: '系统日志', path: '/settings/logs', visible: true, roles: ['admin'], icon: 'FileText' },
+    { id: 16, parentId: 0, title: 'API 文档', path: '/api-docs', visible: true, roles: ['admin', 'editor', 'viewer'], icon: 'BookOpen' },
   ] as Menu[],
 
+  // Updated to match SQL Insert in DATABASE_SCHEMA.md
   roles: [
-      { id: '1', name: '超级管理员', description: '拥有所有权限', permissions: ['all'] },
-      { id: '2', name: '编辑人员', description: '负责数据维护', permissions: ['vector.read', 'vector.write'] },
-      { id: '3', name: '只读访客', description: '仅供查看', permissions: ['vector.read'] },
+      { id: '1', name: '超级管理员', roleKey: 'admin', description: '拥有系统所有权限', permissions: ['*'] },
+      { id: '2', name: '编辑人员', roleKey: 'editor', description: '负责数据维护与知识库配置', permissions: ['dashboard:view', 'vector:view', 'vector:manage', 'vector:search', 'kb:view', 'kb:config', 'kb:retrieval', 'tools:view', 'tools:clean', 'api:view'] },
+      { id: '3', name: '只读访客', roleKey: 'viewer', description: '仅供查看数据，无法进行修改操作', permissions: ['dashboard:view', 'vector:view', 'vector:search', 'kb:view', 'kb:retrieval', 'api:view'] },
   ] as Role[],
 
   ips: [
@@ -107,6 +117,24 @@ const db = {
   ]
 };
 
+// --- Helper to build tree for GET /auth/me ---
+const buildMenuTree = (menus: Menu[]) => {
+  const map: Record<number, Menu> = {};
+  menus.forEach(m => { map[m.id] = { ...m, children: [] }; });
+  
+  const roots: Menu[] = [];
+  menus.forEach(m => {
+    if (m.parentId === 0) {
+      roots.push(map[m.id]);
+    } else {
+      if (map[m.parentId]) {
+        map[m.parentId].children!.push(map[m.id]);
+      }
+    }
+  });
+  return roots;
+};
+
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const mockRequest = async (config: { url: string; method: string; data?: any; params?: any }) => {
@@ -128,9 +156,14 @@ export const mockRequest = async (config: { url: string; method: string; data?: 
   }
   if (url === '/auth/me' && method === 'get') {
     const { password, ...safeUser } = db.users[0];
-    // Filter menus based on role (Mock logic: admin gets all)
-    const menus = db.menus.filter(m => m.roles.includes(safeUser.role));
-    return { code: 200, data: { user: safeUser, menus }, message: 'success' };
+    
+    // 1. Filter visible and permissions
+    const availableMenus = db.menus.filter(m => m.visible && m.roles.includes(safeUser.role));
+    
+    // 2. Build Tree
+    const tree = buildMenuTree(availableMenus);
+
+    return { code: 200, data: { user: safeUser, menus: tree }, message: 'success' };
   }
 
   // ================= 2. 个人中心 =================

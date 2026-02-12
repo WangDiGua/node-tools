@@ -18,6 +18,7 @@ export interface User {
 export interface Role {
   id: string;
   name: string;
+  roleKey?: string; // Corresponds to role_key in DB
   permissions: string[];
   description: string;
 }

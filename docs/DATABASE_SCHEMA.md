@@ -185,3 +185,36 @@ CREATE TABLE `xl_logs` (
   KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
+
+---
+
+## 5. 初始化数据 (Data Seeding)
+
+### 5.1 菜单表初始化 (xl_menus)
+```sql
+INSERT INTO `xl_menus` (`id`, `parent_id`, `title`, `path`, `component`, `icon`, `sort`, `is_visible`, `perms`, `roles`) VALUES
+(1, 0, '仪表盘', '/dashboard', 'Dashboard', 'LayoutDashboard', 1, 1, 'dashboard:view', '["admin", "editor", "viewer"]'),
+(2, 0, '向量配置', '/vector-config', 'Layout', 'Database', 2, 1, 'vector:view', '["admin", "editor", "viewer"]'),
+(3, 2, '向量管理', '/vector', 'VectorList', 'Database', 1, 1, 'vector:manage', '["admin", "editor"]'),
+(4, 2, '向量搜索', '/vector-search', 'VectorSearch', 'Search', 2, 1, 'vector:search', '["admin", "editor", "viewer"]'),
+(5, 0, '知识库', '/kb', 'Layout', 'Book', 3, 1, 'kb:view', '["admin", "editor", "viewer"]'),
+(6, 5, '知识库配置', '/kb/config', 'KBConfig', 'Settings', 1, 1, 'kb:config', '["admin", "editor"]'),
+(7, 5, '知识库检索', '/kb/retrieval', 'KBRetrieval', 'Search', 2, 1, 'kb:retrieval', '["admin", "editor", "viewer"]'),
+(8, 0, '节点工具', '/tools', 'Layout', 'Wrench', 4, 1, 'tools:view', '["admin", "editor"]'),
+(9, 8, '大模型输出清洁', '/tools/llm-clean', 'LLMClean', 'Eraser', 1, 1, 'tools:clean', '["admin", "editor"]'),
+(10, 0, '系统设置', '/settings', 'Layout', 'Settings', 5, 1, 'system:view', '["admin"]'),
+(11, 10, '菜单管理', '/settings/menus', 'MenuManagement', 'List', 1, 1, 'system:menus', '["admin"]'),
+(12, 10, '角色管理', '/settings/roles', 'RoleManagement', 'Shield', 2, 1, 'system:roles', '["admin"]'),
+(13, 10, '用户管理', '/settings/users', 'UserManagement', 'Users', 3, 1, 'system:users', '["admin"]'),
+(14, 10, '系统安全', '/settings/security', 'SystemSecurity', 'Lock', 4, 1, 'system:security', '["admin"]'),
+(15, 10, '系统日志', '/settings/logs', 'SystemLogs', 'FileText', 5, 1, 'system:logs', '["admin"]'),
+(16, 0, 'API 文档', '/api-docs', 'APIDocs', 'BookOpen', 6, 1, 'api:view', '["admin", "editor", "viewer"]');
+```
+
+### 5.2 角色表初始化 (xl_roles)
+```sql
+INSERT INTO `xl_roles` (`id`, `name`, `role_key`, `description`, `permissions`) VALUES
+(1, '超级管理员', 'admin', '拥有系统所有权限', '["*"]'),
+(2, '编辑人员', 'editor', '负责数据维护与知识库配置', '["dashboard:view", "vector:view", "vector:manage", "vector:search", "kb:view", "kb:config", "kb:retrieval", "tools:view", "tools:clean", "api:view"]'),
+(3, '只读访客', 'viewer', '仅供查看数据，无法进行修改操作', '["dashboard:view", "vector:view", "vector:search", "kb:view", "kb:retrieval", "api:view"]');
+```
